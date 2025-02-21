@@ -44,10 +44,16 @@ def load_image(file: UploadFile) -> Image.Image:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image format for {file.filename}. Error: {str(e)}")
 
+# ฟังก์ชันตรวจสอบว่าโมเดลถูกโหลดหรือไม่
+def check_model_loaded():
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model is not loaded.")
+
 # API สำหรับทำนาย 1 รูป
 @app.post("/predict", summary="ทำนายโรคจากภาพใบของทุเรียน", description="อัปโหลดไฟล์ภาพเพื่อตรวจจับโรคในใบของทุเรียน")
 async def predict_single(file: UploadFile = File(...)):
     """รับภาพเดียว วิเคราะห์ และส่งคืนผลลัพธ์การตรวจจับโรค"""
+    check_model_loaded()
     image = load_image(file)
     processed_image = preprocess_image(image)
 
@@ -61,6 +67,7 @@ async def predict_single(file: UploadFile = File(...)):
 @app.post("/predict_multiple", summary="ทำนายโรคจากภาพใบของทุเรียน (หลายไฟล์)", description="อัปโหลดหลายไฟล์พร้อมกันเพื่อตรวจจับโรคในใบของทุเรียน")
 async def predict_multiple(files: list[UploadFile] = File(...)):
     """รับภาพหลายไฟล์ วิเคราะห์ และส่งคืนผลลัพธ์"""
+    check_model_loaded()
     results = []
     
     for file in files:
