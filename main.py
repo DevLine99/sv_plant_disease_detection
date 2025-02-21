@@ -1,9 +1,23 @@
 import io
+import os
 import numpy as np
 import tensorflow as tf
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from PIL import Image
 import pillow_heif  # รองรับไฟล์ HEIC
+import uvicorn
+from pyngrok import ngrok
+import atexit
+from dotenv import load_dotenv
+
+# โหลดไฟล์ .env
+load_dotenv()
+
+# ตั้งค่า authtoken
+authtoken = os.getenv("NGROK_AUTHTOKEN")
+if not authtoken:
+    raise ValueError("NGROK_AUTHTOKEN environment variable is not set")
+ngrok.set_auth_token(authtoken)
 
 # โหลดโมเดลที่เทรนไว้
 MODEL_PATH = "model/MobileNetV2_model_20250119_132758.keras"
@@ -48,6 +62,14 @@ def load_image(file: UploadFile) -> Image.Image:
 def check_model_loaded():
     if model is None:
         raise HTTPException(status_code=500, detail="Model is not loaded.")
+    
+# ฟังก์ชันที่จะปิด ngrok เมื่อโปรแกรมหยุด
+def shutdown():
+    ngrok.disconnect(public_url)
+    print("Ngrok tunnel closed")
+
+# ลงทะเบียน shutdown function ให้ทำงานเมื่อโปรแกรมหยุด
+atexit.register(shutdown)
 
 # API สำหรับทำนาย 1 รูป
 @app.post("/predict", summary="ทำนายโรคจากภาพใบของทุเรียน", description="อัปโหลดไฟล์ภาพเพื่อตรวจจับโรคในใบของทุเรียน")
@@ -81,3 +103,16 @@ async def predict_multiple(files: list[UploadFile] = File(...)):
         results.append({"filename": file.filename, "predicted_class": predicted_class, "confidence": confidence})
     
     return {"predictions": results}
+
+# API สำหรับตรวจสอบสถานะของ API
+@app.get("/status", summary="ตรวจสอบสถานะของ API", description="ตรวจสอบว่า API ทำงานอยู่หรือไม่")
+async def get_status():
+    return {"status": "API is running"}
+
+if __name__ == "__main__":
+    # เปิด ngrok tunnel
+    public_url = ngrok.connect(8000)
+    print(f"ngrok tunnel \"{public_url}\" -> \"http://127.0.0.1:8000\"")
+
+    # รัน FastAPI app
+    uvicorn.run(app, host="0.0.0.0", port=8000)
